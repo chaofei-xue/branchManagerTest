@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Git 分支合并报告</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --card: #ffffff;
+      --line: #d7e0ec;
+      --text: #0f172a;
+      --muted: #526072;
+      --blue: #2563eb;
+      --green: #0f9d58;
+      --orange: #f59e0b;
+      --violet: #7c3aed;
+      --shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(37, 99, 235, 0.10), transparent 28%),
+        linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+    .page {
+      width: min(1440px, calc(100% - 48px));
+      margin: 32px auto 56px;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f172a, #1d4ed8);
+      color: #fff;
+      border-radius: 24px;
+      padding: 28px 32px;
+      box-shadow: var(--shadow);
+    }
+    .hero h1 { margin: 0 0 12px; font-size: 34px; }
+    .hero p { margin: 6px 0; color: rgba(255,255,255,0.82); }
+    .meta-grid, .stats-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      margin-top: 20px;
+    }
+    .meta-card, .stat-card, .panel {
+      background: var(--card);
+      border: 1px solid rgba(215, 224, 236, 0.85);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      color: var(--text);
+    }
+    .meta-card, .stat-card {
+      padding: 18px 20px;
+    }
+    .meta-card .label, .stat-card .label {
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .meta-card .value, .stat-card .value {
+      margin-top: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      word-break: break-all;
+    }
+    .sections {
+      display: grid;
+      gap: 22px;
+      margin-top: 24px;
+    }
+    .panel {
+      padding: 22px 24px;
+    }
+    .panel h2 {
+      margin: 0 0 18px;
+      font-size: 22px;
+    }
+    .branch-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .branch-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: #eaf1ff;
+      color: #1d4ed8;
+      font-weight: 600;
+    }
+    .branch-chip::before {
+      content: "🌿";
+      font-size: 14px;
+    }
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 16px;
+      padding-left: 14px;
+    }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 22px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: linear-gradient(180deg, #93c5fd, #dbeafe);
+    }
+    .timeline-item {
+      position: relative;
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .timeline-index {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid #bfdbfe;
+      color: var(--blue);
+      font-weight: 700;
+      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+    }
+    .timeline-body {
+      padding: 16px 18px;
+      background: #f8fbff;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+    }
+    .timeline-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .kind-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+    .sha {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: #e2e8f0;
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+    .timeline-text { line-height: 1.7; }
+    .graph-wrap {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .branch-graph-svg {
+      width: 100%;
+      min-width: 960px;
+      background: linear-gradient(180deg, #f8fbff, #ffffff);
+      border-radius: 20px;
+      border: 1px solid var(--line);
+    }
+    .branch-card {
+      fill: #eaf1ff;
+      stroke: #93c5fd;
+      stroke-width: 1.5;
+    }
+    .branch-card-text {
+      fill: #0f172a;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .lane-line {
+      stroke: #cbd5e1;
+      stroke-width: 3;
+      stroke-dasharray: 8 8;
+    }
+    .event-dot {
+      fill: #2563eb;
+    }
+    .create-line {
+      stroke: #0f9d58;
+      stroke-width: 4;
+    }
+    .merge-line {
+      stroke: #2563eb;
+      stroke-width: 4;
+    }
+    .skip-line {
+      stroke: #8b5cf6;
+      stroke-width: 3;
+      stroke-dasharray: 8 8;
+    }
+    .event-label-card {
+      fill: #ffffff;
+      stroke: #d7e0ec;
+      stroke-width: 1.2;
+    }
+    .event-label {
+      fill: #0f172a;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .tracking-card {
+      fill: #f5f3ff;
+      stroke: #c4b5fd;
+      stroke-width: 1.2;
+    }
+    .tracking-link {
+      stroke: #8b5cf6;
+      stroke-width: 2.2;
+      stroke-dasharray: 6 6;
+      opacity: 0.78;
+    }
+    .tracking-node {
+      fill: #8b5cf6;
+    }
+    .tracking-target-node {
+      fill: #7c3aed;
+    }
+    .tracking-title {
+      fill: #6d28d9;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .tracking-text {
+      fill: #4c1d95;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .tracking-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+    }
+    .tracking-table th, .tracking-table td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    .tracking-table thead {
+      background: #eff6ff;
+    }
+    .tracking-table tbody tr:nth-child(even) {
+      background: #fafcff;
+    }
+    .empty {
+      color: var(--muted);
+      margin: 0;
+    }
+    @media (max-width: 900px) {
+      .page { width: min(100% - 24px, 1440px); margin: 16px auto 32px; }
+      .hero { padding: 22px 20px; border-radius: 20px; }
+      .hero h1 { font-size: 28px; }
+      .panel { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>Git 分支合并报告</h1>
+      <p>基于当前仓库的提交历史、merge 记录和追踪提交自动生成。</p>
+      <div class="meta-grid">
+        <div class="meta-card"><div class="label">仓库路径</div><div class="value">/Users/xue/file/claude/branchManager/test</div></div>
+        <div class="meta-card"><div class="label">生成时间</div><div class="value">2026-03-26 12:23:56</div></div>
+        <div class="meta-card"><div class="label">基线分支</div><div class="value">master</div></div>
+        <div class="meta-card"><div class="label">当前分支</div><div class="value">dev_test_20260324</div></div>
+      </div>
+    </section>
+
+    <section class="stats-grid">
+      <article class="stat-card"><div class="label">开发分支</div><div class="value">2</div><div class="label">本地 2 / 远端 2</div></article>
+      <article class="stat-card"><div class="label">集成分支</div><div class="value">1</div><div class="label">本地 1 / 远端 1</div></article>
+      <article class="stat-card"><div class="label">事件数</div><div class="value">34</div><div class="label">按时间顺序推断</div></article>
+      <article class="stat-card"><div class="label">追踪提交</div><div class="value">14</div><div class="label">含 [DREO-MERGE]</div></article>
+    </section>
+
+    <section class="sections">
+      <article class="panel">
+        <h2>分支概览</h2>
+        <div class="branch-chips"><span class="branch-chip">master</span><span class="branch-chip">feature_test1_20260324</span><span class="branch-chip">feature_test5_20260326</span><span class="branch-chip">dev_test_20260324</span></div>
+      </article>
+
+      <article class="panel">
+        <h2>时间线</h2>
+        <div class="timeline"><article class="timeline-item timeline-create"><div class="timeline-index">1</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">创建分支</span><time>2026-03-24 16:57:52</time><span class="sha">efca38c</span></div><div class="timeline-text">从 master 拉出 dev_test_20260324</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">2</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-24 16:57:57</time><span class="sha">630d4cc</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">3</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-24 16:58:25</time><span class="sha">5214c9c</span></div><div class="timeline-text">dev_test_20260324 提交 1</div></div></article><article class="timeline-item timeline-create"><div class="timeline-index">4</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">创建分支</span><time>2026-03-24 16:59:16</time><span class="sha">affd1b4</span></div><div class="timeline-text">从 master 拉出 feature_test1_20260324，并提交 2</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">5</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-24 17:00:28</time><span class="sha">4c0c9e5</span></div><div class="timeline-text">将 feature_test1_20260324 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">6</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-24 17:00:28</time><span class="sha">96d2efe</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">7</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-24 17:01:15</time><span class="sha">b9ddf90</span></div><div class="timeline-text">feature_test1_20260324 提交 3</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">8</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-24 17:01:26</time><span class="sha">fe19ff4</span></div><div class="timeline-text">feature_test1_20260324 提交 4</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">9</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-24 17:03:01</time><span class="sha">b6764c5</span></div><div class="timeline-text">将 feature_test1_20260324 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">10</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-24 17:03:01</time><span class="sha">f94c205</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">11</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-24 17:03:49</time><span class="sha">1c05203</span></div><div class="timeline-text">feature_test1_20260324 提交 ds</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">12</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-24 17:04:01</time><span class="sha">4f637be</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">13</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-24 17:04:01</time><span class="sha">9e02c99</span></div><div class="timeline-text">将 feature_test1_20260324 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">14</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-24 17:04:20</time><span class="sha">d892fa7</span></div><div class="timeline-text">feature_test1_20260324 提交 ds</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">15</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-24 17:04:34</time><span class="sha">5b9c807</span></div><div class="timeline-text">将 feature_test1_20260324 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">16</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-24 17:04:34</time><span class="sha">8326f9a</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">17</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-24 17:04:58</time><span class="sha">870a38c</span></div><div class="timeline-text">feature_test1_20260324 提交 ds3232</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">18</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-24 17:05:11</time><span class="sha">26ddc0a</span></div><div class="timeline-text">将 feature_test1_20260324 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">19</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-24 17:05:11</time><span class="sha">af019ed</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">20</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-25 13:52:28</time><span class="sha">122fd31</span></div><div class="timeline-text">feature_test1_20260324 提交 feat: test111</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">21</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-25 13:52:52</time><span class="sha">5b46ba8</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">22</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-25 13:52:52</time><span class="sha">8c2c31c</span></div><div class="timeline-text">将 master 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">23</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-25 13:56:41</time><span class="sha">e0a9f95</span></div><div class="timeline-text">feature_test1_20260324 提交 feat: 推送信息显示测试</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">24</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-25 13:57:15</time><span class="sha">04cbcef</span></div><div class="timeline-text">将 master 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">25</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-25 13:57:15</time><span class="sha">58ba685</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">26</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-25 13:58:27</time><span class="sha">cb11317</span></div><div class="timeline-text">feature_test1_20260324 提交 feat: 推送信息显示测试,dsadashjdkashdkasdhaskdhaskdhakjdhaskjdhaskjdhaskdhasdhsadas100</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">27</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-25 13:58:51</time><span class="sha">a29d5e4</span></div><div class="timeline-text">将 master 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">28</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-25 13:58:51</time><span class="sha">d0f3d0d</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</div></div></article><article class="timeline-item timeline-create"><div class="timeline-index">29</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">创建分支</span><time>2026-03-26 11:36:22</time><span class="sha">f211ed0</span></div><div class="timeline-text">从 master 拉出 feature_test5_20260326，并提交 ew</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">30</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-26 11:37:04</time><span class="sha">626cb13</span></div><div class="timeline-text">将 feature_test5_20260326 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">31</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-26 11:37:04</time><span class="sha">7e327f4</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test5_20260326</div></div></article><article class="timeline-item timeline-branch_commit"><div class="timeline-index">32</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支提交</span><time>2026-03-26 11:37:46</time><span class="sha">29c9719</span></div><div class="timeline-text">feature_test5_20260326 提交 ewewew</div></div></article><article class="timeline-item timeline-merge"><div class="timeline-index">33</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">分支合并</span><time>2026-03-26 11:38:33</time><span class="sha">4268ec8</span></div><div class="timeline-text">将 master 合入 dev_test_20260324</div></div></article><article class="timeline-item timeline-tracking"><div class="timeline-index">34</div><div class="timeline-body"><div class="timeline-meta"><span class="kind-chip">追踪记录</span><time>2026-03-26 11:38:33</time><span class="sha">fb244b0</span></div><div class="timeline-text">写入追踪提交 [DREO-MERGE] dev_test_20260324 &lt;- feature_test5_20260326</div></div></article></div>
+      </article>
+
+      <article class="panel">
+        <h2>分支流转图</h2>
+        <div class="graph-wrap"><svg class="branch-graph-svg" viewBox="0 0 1172 1708" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="分支流转图"><defs><marker id="arrow-head" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb" /></marker><marker id="arrow-head-purple" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b5cf6" /></marker><filter id="card-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.14" /></filter></defs><line x1="156.0" y1="106" x2="156.0" y2="1668" class="lane-line" /><rect x="72.0" y="20" width="168" height="54" rx="14" class="branch-card" /><text x="156.0" y="48.0" text-anchor="middle" class="branch-card-text"><tspan x="156.0" dy="0">master</tspan></text><line x1="432.0" y1="106" x2="432.0" y2="1668" class="lane-line" /><rect x="324.0" y="20" width="216" height="54" rx="14" class="branch-card" /><text x="432.0" y="48.0" text-anchor="middle" class="branch-card-text"><tspan x="432.0" dy="0">feature_test1_20260324</tspan></text><line x1="732.0" y1="106" x2="732.0" y2="1668" class="lane-line" /><rect x="624.0" y="20" width="216" height="54" rx="14" class="branch-card" /><text x="732.0" y="48.0" text-anchor="middle" class="branch-card-text"><tspan x="732.0" dy="0">feature_test5_20260326</tspan></text><line x1="1012.0" y1="106" x2="1012.0" y2="1668" class="lane-line" /><rect x="924.0" y="20" width="176" height="54" rx="14" class="branch-card" /><text x="1012.0" y="48.0" text-anchor="middle" class="branch-card-text"><tspan x="1012.0" dy="0">dev_test_20260324</tspan></text><circle cx="156.0" cy="144" r="5" class="event-dot" /><circle cx="1012.0" cy="144" r="5" class="event-dot" /><line x1="156.0" y1="144" x2="1012.0" y2="144" class="create-line" marker-end="url(#arrow-head)" /><rect x="466.0" y="112.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="584.0" y="137.0" text-anchor="middle" class="event-label"><tspan x="584.0" dy="0">从 master 拉出 dev_test_2026</tspan><tspan x="584.0" dy="16">0324</tspan></text><circle cx="156.0" cy="260" r="5" class="event-dot" /><circle cx="432.0" cy="260" r="5" class="event-dot" /><line x1="156.0" y1="260" x2="432.0" y2="260" class="create-line" marker-end="url(#arrow-head)" /><rect x="176.0" y="228.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="294.0" y="253.0" text-anchor="middle" class="event-label"><tspan x="294.0" dy="0">从 master 拉出 feature_test1</tspan><tspan x="294.0" dy="16">_20260324，并提交 2</tspan></text><circle cx="432.0" cy="376" r="5" class="event-dot" /><circle cx="1012.0" cy="376" r="5" class="event-dot" /><line x1="432.0" y1="376" x2="1012.0" y2="376" class="merge-line" marker-end="url(#arrow-head)" /><rect x="604.0" y="344.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="722.0" y="369.0" text-anchor="middle" class="event-label"><tspan x="722.0" dy="0">将 feature_test1_20260324 合</tspan><tspan x="722.0" dy="16">入 dev_test_20260324</tspan></text><circle cx="432.0" cy="492" r="5" class="event-dot" /><circle cx="1012.0" cy="492" r="5" class="event-dot" /><line x1="432.0" y1="492" x2="1012.0" y2="492" class="merge-line" marker-end="url(#arrow-head)" /><rect x="604.0" y="460.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="722.0" y="485.0" text-anchor="middle" class="event-label"><tspan x="722.0" dy="0">将 feature_test1_20260324 合</tspan><tspan x="722.0" dy="16">入 dev_test_20260324</tspan></text><circle cx="432.0" cy="608" r="5" class="event-dot" /><circle cx="1012.0" cy="608" r="5" class="event-dot" /><line x1="432.0" y1="608" x2="1012.0" y2="608" class="merge-line" marker-end="url(#arrow-head)" /><rect x="604.0" y="576.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="722.0" y="601.0" text-anchor="middle" class="event-label"><tspan x="722.0" dy="0">将 feature_test1_20260324 合</tspan><tspan x="722.0" dy="16">入 dev_test_20260324</tspan></text><circle cx="432.0" cy="724" r="5" class="event-dot" /><circle cx="1012.0" cy="724" r="5" class="event-dot" /><line x1="432.0" y1="724" x2="1012.0" y2="724" class="merge-line" marker-end="url(#arrow-head)" /><rect x="604.0" y="692.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="722.0" y="717.0" text-anchor="middle" class="event-label"><tspan x="722.0" dy="0">将 feature_test1_20260324 合</tspan><tspan x="722.0" dy="16">入 dev_test_20260324</tspan></text><circle cx="432.0" cy="840" r="5" class="event-dot" /><circle cx="1012.0" cy="840" r="5" class="event-dot" /><line x1="432.0" y1="840" x2="1012.0" y2="840" class="merge-line" marker-end="url(#arrow-head)" /><rect x="604.0" y="808.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="722.0" y="833.0" text-anchor="middle" class="event-label"><tspan x="722.0" dy="0">将 feature_test1_20260324 合</tspan><tspan x="722.0" dy="16">入 dev_test_20260324</tspan></text><circle cx="156.0" cy="956" r="5" class="event-dot" /><circle cx="1012.0" cy="956" r="5" class="event-dot" /><line x1="156.0" y1="956" x2="1012.0" y2="956" class="merge-line" marker-end="url(#arrow-head)" /><rect x="466.0" y="924.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="584.0" y="949.0" text-anchor="middle" class="event-label"><tspan x="584.0" dy="0">将 master 合入 dev_test_2026</tspan><tspan x="584.0" dy="16">0324</tspan></text><circle cx="156.0" cy="1072" r="5" class="event-dot" /><circle cx="1012.0" cy="1072" r="5" class="event-dot" /><line x1="156.0" y1="1072" x2="1012.0" y2="1072" class="merge-line" marker-end="url(#arrow-head)" /><rect x="466.0" y="1040.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="584.0" y="1065.0" text-anchor="middle" class="event-label"><tspan x="584.0" dy="0">将 master 合入 dev_test_2026</tspan><tspan x="584.0" dy="16">0324</tspan></text><circle cx="156.0" cy="1188" r="5" class="event-dot" /><circle cx="1012.0" cy="1188" r="5" class="event-dot" /><line x1="156.0" y1="1188" x2="1012.0" y2="1188" class="merge-line" marker-end="url(#arrow-head)" /><rect x="466.0" y="1156.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="584.0" y="1181.0" text-anchor="middle" class="event-label"><tspan x="584.0" dy="0">将 master 合入 dev_test_2026</tspan><tspan x="584.0" dy="16">0324</tspan></text><circle cx="156.0" cy="1304" r="5" class="event-dot" /><circle cx="732.0" cy="1304" r="5" class="event-dot" /><line x1="156.0" y1="1304" x2="732.0" y2="1304" class="create-line" marker-end="url(#arrow-head)" /><rect x="326.0" y="1272.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="444.0" y="1297.0" text-anchor="middle" class="event-label"><tspan x="444.0" dy="0">从 master 拉出 feature_test5</tspan><tspan x="444.0" dy="16">_20260326，并提交 ew</tspan></text><circle cx="732.0" cy="1420" r="5" class="event-dot" /><circle cx="1012.0" cy="1420" r="5" class="event-dot" /><line x1="732.0" y1="1420" x2="1012.0" y2="1420" class="merge-line" marker-end="url(#arrow-head)" /><rect x="754.0" y="1388.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="872.0" y="1413.0" text-anchor="middle" class="event-label"><tspan x="872.0" dy="0">将 feature_test5_20260326 合</tspan><tspan x="872.0" dy="16">入 dev_test_20260324</tspan></text><circle cx="156.0" cy="1536" r="5" class="event-dot" /><circle cx="1012.0" cy="1536" r="5" class="event-dot" /><line x1="156.0" y1="1536" x2="1012.0" y2="1536" class="merge-line" marker-end="url(#arrow-head)" /><rect x="466.0" y="1504.0" width="236" height="64" rx="12" class="event-label-card" filter="url(#card-shadow)" /><text x="584.0" y="1529.0" text-anchor="middle" class="event-label"><tspan x="584.0" dy="0">将 master 合入 dev_test_2026</tspan><tspan x="584.0" dy="16">0324</tspan></text></svg></div>
+      </article>
+
+      <article class="panel">
+        <h2>追踪提交</h2>
+        <table class="tracking-table"><thead><tr><th>时间</th><th>提交信息</th><th>SHA</th></tr></thead><tbody><tr><td>2026-03-24 16:57:57+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</td><td><code>630d4cc</code></td></tr><tr><td>2026-03-24 17:00:28+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</td><td><code>96d2efe</code></td></tr><tr><td>2026-03-24 17:03:01+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</td><td><code>f94c205</code></td></tr><tr><td>2026-03-24 17:04:01+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</td><td><code>4f637be</code></td></tr><tr><td>2026-03-24 17:04:34+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</td><td><code>8326f9a</code></td></tr><tr><td>2026-03-24 17:05:11+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</td><td><code>af019ed</code></td></tr><tr><td>2026-03-25 13:52:52+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</td><td><code>5b46ba8</code></td></tr><tr><td>2026-03-25 13:57:15+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</td><td><code>58ba685</code></td></tr><tr><td>2026-03-25 13:58:51+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test1_20260324</td><td><code>d0f3d0d</code></td></tr><tr><td>2026-03-26 11:37:04+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test5_20260326</td><td><code>7e327f4</code></td></tr><tr><td>2026-03-26 11:38:33+08:00</td><td>[DREO-MERGE] dev_test_20260324 &lt;- feature_test5_20260326</td><td><code>fb244b0</code></td></tr></tbody></table>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
